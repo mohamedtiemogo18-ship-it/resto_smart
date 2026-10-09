@@ -32,21 +32,31 @@ def is_transaction_pooler(url: str) -> bool:
     return port == TRANSACTION_POOLER_PORT
 
 
-def build_engine(url: str, echo: bool = False) -> AsyncEngine:
-    """Construit l'engine async en tenant compte du mode du pooler."""
-    connect_args: dict = {}
-
+def pooler_connect_args(url: str) -> dict:
+    """Paramètres de connexion adaptés au mode du pooler Supabase."""
     if is_transaction_pooler(url):
         # PgBouncer en mode transaction ne conserve pas les requêtes
         # préparées entre les transactions : on désactive leur cache.
-        connect_args["statement_cache_size"] = 0
+        return {"statement_cache_size": 0}
+    return {}
 
-    return create_async_engine(
-        url,
-        echo=echo,
-        pool_pre_ping=True,
-        connect_args=connect_args,
-    )
+
+def build_engine(url: str, echo: bool = False, poolclass=None) -> AsyncEngine:
+    """Construit l'engine async en tenant compte du mode du pooler.
+
+    `poolclass` permet d'imposer `NullPool` (utile dans les tests, où chaque
+    test possède son propre event loop et ne peut réutiliser les connexions
+    d'un pool partagé).
+    """
+    kwargs: dict = {
+        "echo": echo,
+        "pool_pre_ping": True,
+        "connect_args": pooler_connect_args(url),
+    }
+    if poolclass is not None:
+        kwargs["poolclass"] = poolclass
+
+    return create_async_engine(url, **kwargs)
 
 
 engine: AsyncEngine = build_engine(settings.DATABASE_URL)
