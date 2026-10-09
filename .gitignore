@@ -1,0 +1,44 @@
+# Dependencies
+node_modules/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.env
+.env.local
+.env.*.local
+
+# Build
+dist/
+build/
+.next/
+out/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Test artifacts
+test-results/
+playwright-report/
+coverage/
+.pytest_cache/
+.ruff_cache/
+
+# Database
+*.db
+*.sqlite3
+
+# Secrets
+*.pem
+*.key
