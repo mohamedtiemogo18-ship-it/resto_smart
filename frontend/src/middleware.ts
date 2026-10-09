@@ -67,5 +67,7 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|logo.svg).*)'],
+  // `/api` est exclu : ces routes doivent renvoyer du JSON (401), pas une
+  // redirection HTML vers la page de connexion.
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|logo.svg|api/).*)'],
 }
