@@ -3,10 +3,10 @@ import { NextResponse, type NextRequest } from 'next/server'
 
 const PUBLIC_PATHS = ['/login', '/mot-de-passe-oublie', '/auth/callback']
 
-const PREFIX_ROLES: Record<string, string[]> = {
-  '/guichet': ['logisticien', 'admin'],
-  '/admin': ['admin'],
-  '/etudiant': ['student'],
+const PROTECTED: Record<string, string> = {
+  '/etudiant': 'student',
+  '/guichet': 'logistician',
+  '/admin': 'admin',
 }
 
 export async function middleware(request: NextRequest) {
@@ -21,11 +21,7 @@ export async function middleware(request: NextRequest) {
           return request.cookies.getAll()
         },
         setAll(
-          cookiesToSet: {
-            name: string
-            value: string
-            options: CookieOptions
-          }[]
+          cookiesToSet: { name: string; value: string; options: CookieOptions }[]
         ) {
           cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
           response = NextResponse.next({ request })
@@ -37,8 +33,8 @@ export async function middleware(request: NextRequest) {
     }
   )
 
-  // Rafraîchit la session si besoin ; indispensable pour que les
-  // Server Components voient un utilisateur à jour.
+  // Rafraîchit la session si besoin. Indispensable pour que les Server
+  // Components voient un utilisateur à jour.
   const {
     data: { user },
   } = await supabase.auth.getUser()
@@ -55,22 +51,16 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/', request.url))
   }
 
-  const prefix = Object.keys(PREFIX_ROLES).find((p) => pathname.startsWith(p))
-
+  // Vérification de rôle volontairement absente ici.
+  //
+  // Le middleware ne lit plus la table `profiles` via Supabase : le rôle est
+  // une donnée de sécurité et sa source de vérité est le backend. La garde
+  // fine est faite dans chaque layout (server component), qui appelle
+  // `/auth/me`. On évite ainsi un appel réseau supplémentaire à chaque
+  // requête, et une dépendance au service REST de Supabase.
+  const prefix = Object.keys(PROTECTED).find((p) => pathname.startsWith(p))
   if (prefix && user) {
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('role, is_active')
-      .eq('id', user.id)
-      .single()
-
-    if (!profile?.is_active) {
-      return NextResponse.redirect(new URL('/login?error=ACCOUNT_DISABLED', request.url))
-    }
-
-    if (!PREFIX_ROLES[prefix].includes(profile.role)) {
-      return NextResponse.redirect(new URL('/interdit', request.url))
-    }
+    response.headers.set('x-required-role', PROTECTED[prefix])
   }
 
   return response
