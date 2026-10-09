@@ -63,11 +63,14 @@ class Ticket(Base):
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
 
+    # `foreign_keys` explicite des deux côtés : tickets -> reservations
+    # possède deux chemins (reservation_id, et la clé composite
+    # (reservation_id, student_id)).
     reservation: Mapped["Reservation"] = relationship(  # noqa: F821
-        back_populates="tickets"
+        back_populates="tickets", foreign_keys="Ticket.reservation_id"
     )
     student: Mapped["Profile"] = relationship(  # noqa: F821
-        back_populates="tickets", foreign_keys=[student_id]
+        back_populates="tickets", foreign_keys="Ticket.student_id"
     )
 
     __table_args__ = (

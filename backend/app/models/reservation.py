@@ -76,8 +76,14 @@ class Reservation(Base):
         cascade="all, delete-orphan",
         lazy="selectin",
     )
+    # `foreign_keys` explicite : tickets pointe vers reservations par DEUX
+    # chemins (reservation_id seul, et la clé composite (reservation_id,
+    # student_id)). Sans cette précision, SQLAlchemy lève
+    # AmbiguousForeignKeysError à la première requête.
     tickets: Mapped[list["Ticket"]] = relationship(  # noqa: F821
-        back_populates="reservation", cascade="all, delete-orphan"
+        back_populates="reservation",
+        cascade="all, delete-orphan",
+        foreign_keys="Ticket.reservation_id",
     )
 
     __table_args__ = (UniqueConstraint("id", "student_id", name="reservations_id_student_uk"),)

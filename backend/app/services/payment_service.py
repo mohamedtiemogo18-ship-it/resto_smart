@@ -35,8 +35,8 @@ class PaymentService:
         self._db = db
         self._settings = settings
         self._qr = QRService(settings)
-        self._pdf = PDFService(settings)
         self._storage = StorageService(settings)
+        self._pdf = PDFService(settings, storage=self._storage, db=db)
 
     async def confirm(
         self,

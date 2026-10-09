@@ -21,10 +21,14 @@ from app.models.ticket import Ticket
 
 
 class PDFService:
-    def __init__(self, settings) -> None:
+    def __init__(self, settings, storage=None, db=None) -> None:
         self._settings = settings
         self._per_page = getattr(settings, "PDF_PER_PAGE", 4)
         self._page_size = A5 if getattr(settings, "PDF_PAGE_SIZE", "A5") == "A5" else A4
+        self._storage = storage
+        self._db = db
+        self._image_cache: dict[str, bytes | None] = {}
+        self._identity_cache: dict | None = None
 
     # ------------------------------------------------------------------
     # Ticket unitaire
@@ -32,6 +36,7 @@ class PDFService:
 
     async def render(self, ticket: Ticket) -> bytes:
         """Rendu d'un ticket individuel en mémoire."""
+        await self._load_config()
         buffer = io.BytesIO()
         c = canvas.Canvas(buffer, pagesize=self._page_size)
         width, height = self._page_size
@@ -48,6 +53,7 @@ class PDFService:
 
     async def render_sheet(self, tickets: list[Ticket]) -> bytes:
         """Feuille A4 réunissant plusieurs tickets à découper."""
+        await self._load_config()
         buffer = io.BytesIO()
         c = canvas.Canvas(buffer, pagesize=A4)
         page_width, page_height = A4
@@ -129,9 +135,9 @@ class PDFService:
             except Exception:
                 pass  # un QR illisible ne doit pas faire échouer la vente
 
-        # Signature et cachet
-        self._draw_image(c, self._settings, "SIGNATURE_IMAGE_PATH", width - 42 * mm, 8 * mm, 34 * mm, 14 * mm)
-        self._draw_image(c, self._settings, "CACHET_IMAGE_PATH", width - 38 * mm, height - 34 * mm, 30 * mm, 12 * mm)
+        # Signature et cachet — déposés par l'admin dans Supabase Storage
+        self._draw_stored_image(c, "signature.image_path", width - 42 * mm, 8 * mm, 34 * mm, 14 * mm)
+        self._draw_stored_image(c, "cachet.image_path", width - 38 * mm, height - 34 * mm, 30 * mm, 12 * mm)
 
         # Pied
         c.setStrokeColor(colors.HexColor("#E5E7EB"))
@@ -154,35 +160,116 @@ class PDFService:
 
         c.drawImage(ImageReader(png_buffer), x, y, size, size, mask="auto")
 
-    def _draw_image(
+    def _draw_stored_image(
         self,
         c: canvas.Canvas,
-        settings,
-        attr: str,
+        setting_key: str,
         x: float,
         y: float,
         max_w: float,
         max_h: float,
     ) -> None:
-        path = getattr(settings, attr, None)
-        if not path or not os.path.isfile(path):
+        """Dessine une image déposée par l'administrateur.
+
+        Le chemin est lu dans `app_settings` (`signature.image_path`,
+        `cachet.image_path`). La source peut être un fichier local en
+        développement ou un objet Storage en production.
+        """
+        path = self._stored_path(setting_key)
+        if not path:
             return
+
         try:
             from reportlab.lib.utils import ImageReader
 
-            c.drawImage(ImageReader(path), x, y, max_w, max_h, preserveAspectRatio=True, mask="auto")
+            reader = self._image_reader(path)
+            if reader is not None:
+                c.drawImage(reader, x, y, max_w, max_h, preserveAspectRatio=True, mask="auto")
         except Exception:
+            # Une image illisible ne doit jamais faire échouer une vente
             pass
+
+    def _stored_path(self, setting_key: str) -> str | None:
+        if self._identity_cache is None:
+            return None
+        raw = self._identity_cache.get(setting_key)
+        if isinstance(raw, dict):
+            path = raw.get("path")
+            return path if isinstance(path, str) and path else None
+        return None
+
+    def _image_reader(self, path: str):
+        """Charge une image, localement ou depuis le cache préchargé."""
+        if os.path.isfile(path):
+            from reportlab.lib.utils import ImageReader
+
+            return ImageReader(path)
+
+        content = self._image_cache.get(path)
+        if not content:
+            return None
+
+        from reportlab.lib.utils import ImageReader
+
+        return ImageReader(io.BytesIO(content))
 
     def _meal_label(self, ticket: Ticket) -> str:
         labels = {"BREAKFAST": "Petit-déjeuner", "LUNCH": "Déjeuner", "DINNER": "Dîner"}
         code = getattr(ticket, "meal_code", None)
         return labels.get(code, "Repas universitaire")
 
-    def _identity(self) -> dict:
-        raw = getattr(self._settings, "RESTO_IDENTITY", None)
+    async def _load_config(self) -> None:
+        """Charge l'identité et les chemins d'images depuis `app_settings`.
+
+        Les images de signature et de cachet sont déposées par
+        l'administrateur et stockées dans Supabase Storage : leur chemin est
+        mémorisé dans `app_settings`, jamais dans les variables
+        d'environnement.
+        """
+        if self._db is None:
+            # Hors base (tests) : on retombe sur les valeurs d'environnement
+            self._identity_cache = {
+                "resto.identity": self._settings.RESTO_IDENTITY or {},
+                "signature.image_path": {"path": self._settings.SIGNATURE_IMAGE_PATH},
+                "cachet.image_path": {"path": self._settings.CACHET_IMAGE_PATH},
+            }
+            return
+
+        from app.services.settings_service import SettingsService
+
+        service = SettingsService(self._db, self._settings)
+        try:
+            identity = await service.get_value("resto.identity") or {}
+            signature = await service.get_value("signature.image_path") or {}
+            cachet = await service.get_value("cachet.image_path") or {}
+            self._identity_cache = {
+                "resto.identity": identity,
+                "signature.image_path": signature,
+                "cachet.image_path": cachet,
+            }
+            # Préchargement des images (Storage est asynchrone)
+            for key in ("signature.image_path", "cachet.image_path"):
+                path = self._path_from(self._identity_cache.get(key))
+                if path and not os.path.isfile(path) and self._storage is not None:
+                    try:
+                        self._image_cache[path] = await self._storage.download(path)
+                    except Exception:
+                        self._image_cache[path] = None
+        except Exception:
+            self._identity_cache = {}
+
+    @staticmethod
+    def _path_from(raw) -> str | None:
         if isinstance(raw, dict):
-            return raw
+            path = raw.get("path")
+            return path if isinstance(path, str) and path else None
+        return None
+
+    def _identity(self) -> dict:
+        if self._identity_cache:
+            identity = self._identity_cache.get("resto.identity")
+            if isinstance(identity, dict):
+                return identity
         return {"name": "Restauration universitaire", "city": ""}
 
 
