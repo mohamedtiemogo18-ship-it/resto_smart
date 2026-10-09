@@ -64,21 +64,35 @@ group by r.id, p.matricule, p.full_name, p.room;
 -- ---------------------------------------------------------------------
 -- Chiffre d'affaires par jour (encaissements)
 -- ---------------------------------------------------------------------
+-- Les encaissements et les consommations sont agrégés séparément puis
+-- joints par date. Une sous-requête corrélée référençant r.paid_at serait
+-- rejetée : cette colonne n'est pas dans le GROUP BY (erreur 42803).
 create or replace view public.v_daily_sales
 with (security_invoker = true) as
+with paid as (
+  select (r.paid_at at time zone 'Africa/Abidjan')::date as sale_date,
+         count(*)                    as reservations_paid,
+         coalesce(sum(r.total_amount), 0) as revenue,
+         coalesce(sum(r.items_count), 0)  as meals_sold
+    from public.reservations r
+   where r.status = 'PAID'
+   group by 1
+), used as (
+  select (t.used_at at time zone 'Africa/Abidjan')::date as sale_date,
+         count(*) as tickets_used
+    from public.tickets t
+   where t.status = 'USED'
+   group by 1
+)
 select
-  (r.paid_at at time zone 'Africa/Abidjan')::date as sale_date,
-  count(*)                                   as reservations_paid,
-  coalesce(sum(r.total_amount), 0)           as revenue,
-  coalesce(sum(r.items_count), 0)            as meals_sold,
-  coalesce((select count(*) from public.tickets t
-             where t.status = 'USED'
-               and (t.used_at at time zone 'Africa/Abidjan')::date
-                   = (r.paid_at at time zone 'Africa/Abidjan')::date), 0) as tickets_used
-from public.reservations r
-where r.status = 'PAID'
-group by 1
-order by 1 desc;
+  p.sale_date,
+  p.reservations_paid,
+  p.revenue,
+  p.meals_sold,
+  coalesce(u.tickets_used, 0) as tickets_used
+from paid p
+left join used u on u.sale_date = p.sale_date
+order by p.sale_date desc;
 
 -- ---------------------------------------------------------------------
 -- Répartition des ventes par repas
@@ -100,7 +114,10 @@ left join (
    where status = 'USED'
    group by meal_type_id
 ) t on t.meal_type_id = mt.id
-group by mt.id, mt.name
+-- `t.used_count` doit être dans le GROUP BY : `t` est une sous-requête,
+-- donc aucune dépendance fonctionnelle ne s'applique (contrairement à
+-- mt.id, clé primaire de meal_types, qui couvre mt.name et mt.display_order).
+group by mt.id, mt.name, mt.display_order, t.used_count
 order by mt.display_order;
 
 -- ---------------------------------------------------------------------
