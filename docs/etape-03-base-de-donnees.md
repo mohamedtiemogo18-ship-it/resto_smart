@@ -213,13 +213,13 @@ Toutes en `security_invoker = true` : un étudiant qui interroge une vue ne voit
 | Expiration | cron quotidien `fn_expire_tickets()` |
 | Annulation | `PENDING_PAYMENT` uniquement, via `fn_cancel_reservation` |
 | Remise à zéro des numéros | `fn_reset_number_sequences()` le 1er janvier |
-| Fuseau horaire | `Africa/Ouagadougou` dans les vues de reporting — à confirmer |
+| Fuseau horaire | `Africa/Abidjan` dans les vues de reporting — à confirmer |
 | Devise | XOF (FCFA) — à confirmer |
 | Montants des prix | À saisir par l'admin depuis l'écran Tarifs |
 
 ## 3.9 Points à valider avant l'étape 4
 
-1. Fuseau horaire et devise : `Africa/Ouagadougou` / XOF sont-ils corrects ?
+1. Fuseau horaire et devise : `Africa/Abidjan` / XOF sont-ils corrects ?
 2. Validité de 30 jours : faut-il plutôt lier le ticket à une date de repas choisie à la réservation ?
 3. Confirmez-vous le modèle « 1 ligne de réservation = 1 type de repas, quantité N, N tickets » ?
 4. Souhaitez-vous une table `payments` séparée (montant reçu, monnaie rendue) ou l'encaissement reste-t-il une simple bascule de statut ?

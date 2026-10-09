@@ -19,8 +19,12 @@ from app.schemas.report import (
 )
 from app.schemas.user import CurrentUser
 
-#: Fuseau des vues de reporting — à confirmer avec le service
-TIMEZONE_NAME = "Africa/Ouagadougou"
+#: Fuseau des agrégats de reporting.
+#: La Côte d'Ivoire est à UTC+0 toute l'année. La base Supabase, elle, est
+#: hébergée en Irlande, qui passe à l'heure d'été (UTC+1) : sans fuseau
+#: nommé explicite, les chiffres « du jour » seraient décalés d'une heure
+#: une partie de l'année. Ne jamais remplacer par l'heure locale du serveur.
+TIMEZONE_NAME = "Africa/Abidjan"
 
 
 class ReportService:

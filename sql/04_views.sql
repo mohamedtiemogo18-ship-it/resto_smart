@@ -67,14 +67,14 @@ group by r.id, p.matricule, p.full_name, p.room;
 create or replace view public.v_daily_sales
 with (security_invoker = true) as
 select
-  (r.paid_at at time zone 'Africa/Ouagadougou')::date as sale_date,
+  (r.paid_at at time zone 'Africa/Abidjan')::date as sale_date,
   count(*)                                   as reservations_paid,
   coalesce(sum(r.total_amount), 0)           as revenue,
   coalesce(sum(r.items_count), 0)            as meals_sold,
   coalesce((select count(*) from public.tickets t
              where t.status = 'USED'
-               and (t.used_at at time zone 'Africa/Ouagadougou')::date
-                   = (r.paid_at at time zone 'Africa/Ouagadougou')::date), 0) as tickets_used
+               and (t.used_at at time zone 'Africa/Abidjan')::date
+                   = (r.paid_at at time zone 'Africa/Abidjan')::date), 0) as tickets_used
 from public.reservations r
 where r.status = 'PAID'
 group by 1
