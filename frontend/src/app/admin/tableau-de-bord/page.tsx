@@ -1,85 +1,77 @@
-import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
 import Link from 'next/link'
-import { formatDate, formatDateTime, formatRelative, toApiDate } from '@/lib/format/date'
-import { formatMoney, computeChange, formatAmount } from '@/lib/format/money'
+
+import { createClient } from '@/lib/supabase/server'
+import { api } from '@/lib/api-server'
+import { Button } from '@/components/ui/button'
+import { PageHeader, StatCard } from '@/components/ui/layout'
+import { formatMoney } from '@/lib/format/money'
 import type { Dashboard } from '@/types'
 
 export const metadata = { title: 'Administration' }
 
-async function fetchDashboard(token: string): Promise<Dashboard | null> {
-  const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/reports/dashboard`, {
-    headers: { Authorization: `Bearer ${token}` },
-    cache: 'no-store',
-  })
-  if (!res.ok) return null
-  const body = await res.json()
-  return body.data ?? null
+async function fetchDashboard(token: string) {
+  try {
+    return await api<Dashboard>('/reports/dashboard', token)
+  } catch {
+    return null
+  }
 }
+
+const RACCOURCIS = [
+  { href: '/admin/utilisateurs', label: 'Gérer les comptes' },
+  { href: '/admin/tarifs', label: 'Tarifs' },
+  { href: '/admin/reglages', label: 'Signature et cachet' },
+  { href: '/admin/rapports', label: 'Rapports' },
+  { href: '/admin/audit', label: "Journal d'audit" },
+]
 
 export default async function AdminDashboardPage() {
   const supabase = createClient()
-  const { data: { session } } = await supabase.auth.getSession()
-  if (!session) redirect('/login')
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
 
-  const data = await fetchDashboard(session.access_token)
-
-  const kpis = [
-    { label: "Chiffre d'affaires du jour", value: data ? formatMoney(data.today_revenue) : '—' },
-    { label: 'Réservations encaissées', value: data?.today_reservations_paid ?? '—' },
-    { label: 'Tickets consommés', value: data?.today_tickets_used ?? '—' },
-    { label: 'Tickets valides en circulation', value: data?.tickets_pending ?? '—' },
-    { label: 'Tickets expirés', value: data?.tickets_expired ?? '—' },
-  ]
+  const data = session ? await fetchDashboard(session.access_token) : null
 
   return (
-    <div className="space-y-6 p-4 lg:p-6">
-      <div>
-        <h1 className="text-2xl font-bold">Administration</h1>
-        <p className="text-sm text-muted-foreground">
-          Vue d'ensemble de la plateforme.
-        </p>
+    <div className="page">
+      <PageHeader
+        title="Administration"
+        description="Vue d'ensemble de la plateforme de restauration universitaire."
+      />
+
+      <div className="stat-grid">
+        <StatCard
+          label="Chiffre d'affaires du jour"
+          value={data ? formatMoney(data.today_revenue) : '—'}
+          tone="success"
+        />
+        <StatCard
+          label="Réservations encaissées"
+          value={data?.today_reservations_paid ?? '—'}
+        />
+        <StatCard
+          label="Tickets consommés"
+          value={data?.today_tickets_used ?? '—'}
+        />
+        <StatCard
+          label="Tickets valides"
+          value={data?.tickets_pending ?? '—'}
+          tone="primary"
+          hint="En circulation"
+        />
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {kpis.map((kpi) => (
-          <Card key={kpi.label}>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                {kpi.label}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-3xl font-bold tabular-nums">{kpi.value}</p>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Raccourcis</CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-wrap gap-3">
-          <Button asChild>
-            <Link href="/admin/utilisateurs">Gérer les comptes</Link>
-          </Button>
-          <Button asChild variant="outline">
-            <Link href="/admin/tarifs">Tarifs</Link>
-          </Button>
-          <Button asChild variant="outline">
-            <Link href="/admin/reglages">Signature et cachet</Link>
-          </Button>
-          <Button asChild variant="outline">
-            <Link href="/admin/rapports">Rapports</Link>
-          </Button>
-          <Button asChild variant="outline">
-            <Link href="/admin/audit">Journal d'audit</Link>
-          </Button>
-        </CardContent>
-      </Card>
+      <section className="space-y-3">
+        <h2 className="text-lg font-semibold">Raccourcis</h2>
+        <div className="flex flex-wrap gap-2">
+          {RACCOURCIS.map((r) => (
+            <Button key={r.href} asChild variant="outline">
+              <Link href={r.href}>{r.label}</Link>
+            </Button>
+          ))}
+        </div>
+      </section>
     </div>
   )
 }

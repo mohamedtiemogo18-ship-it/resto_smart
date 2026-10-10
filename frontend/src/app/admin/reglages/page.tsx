@@ -1,129 +1,118 @@
 import { createClient } from '@/lib/supabase/server'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { api } from '@/lib/api-server'
+import { PageHeader } from '@/components/ui/layout'
 import type { Setting } from '@/types'
 
 export const metadata = { title: 'Réglages' }
 
 async function fetchSettings(token: string) {
-  const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/settings`, {
-    headers: { Authorization: `Bearer ${token}` },
-    cache: 'no-store',
-  })
-  if (!res.ok) return [] as Setting[]
-  const body = await res.json()
-  return (body.data ?? []) as Setting[]
+  try {
+    return await api<Setting[]>('/admin/settings', token)
+  } catch {
+    return null
+  }
 }
 
 export default async function ReglagesPage() {
   const supabase = createClient()
-  const { data: { session } } = await supabase.auth.getSession()
-  const settings = session ? await fetchSettings(session.access_token) : []
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
+
+  const settings = session ? await fetchSettings(session.access_token) : null
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL
 
   return (
-    <div className="space-y-6 p-4 lg:p-6">
-      <div>
-        <h1 className="text-2xl font-bold">Réglages</h1>
-        <p className="text-sm text-muted-foreground">
-          Identité du restaurant, validité des tickets et gabarit PDF.
+    <div className="page">
+      <PageHeader
+        title="Réglages"
+        description="Identité du restaurant, validité des tickets et gabarit PDF."
+      />
+
+      {/* Dépôt des images */}
+      <div className="surface p-5">
+        <h2 className="font-semibold">Signature et cachet</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Les images déposées ici apparaissent sur chaque ticket PDF généré.
+          Formats acceptés : PNG, JPG, WebP — 2 Mo maximum.
         </p>
+
+        <div className="mt-4 grid gap-5 sm:grid-cols-2">
+          <UploadField
+            label="Signature"
+            kind="signature"
+            apiUrl={apiUrl}
+          />
+          <UploadField
+            label="Cachet de l'université"
+            kind="cachet"
+            apiUrl={apiUrl}
+          />
+        </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        {/* Images du PDF */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Signature et cachet</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <UploadField
-              label="Signature"
-              endpoint="/admin/settings/signature"
-              hint="PNG, JPG ou WebP — 2 Mo maximum. Apparaît en tête des tickets."
-            />
-            <UploadField
-              label="Cachet université"
-              endpoint="/admin/settings/cachet"
-              hint="PNG, JPG ou WebP — 2 Mo maximum. Apparaît en bas des tickets."
-            />
-          </CardContent>
-        </Card>
+      {/* Paramètres */}
+      <div className="surface p-5">
+        <h2 className="font-semibold">Paramètres enregistrés</h2>
 
-        {/* Paramètres courants */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Paramètres enregistrés</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {settings.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Aucun paramètre.</p>
-            ) : (
-              <dl className="divide-y">
-                {settings.map((s) => (
-                  <div key={s.key} className="py-3">
-                    <dt className="font-mono text-xs text-muted-foreground">{s.key}</dt>
-                    <dd className="mt-1 text-sm">
-                      {typeof s.value === 'object'
-                        ? JSON.stringify(s.value)
-                        : String(s.value)}
-                    </dd>
-                  </div>
-                ))}
-              </dl>
-            )}
-          </CardContent>
-        </Card>
+        {settings && settings.length > 0 ? (
+          <dl className="mt-4 divide-y">
+            {settings.map((s) => (
+              <div key={s.key} className="py-3 first:pt-0 last:pb-0">
+                <dt className="font-mono text-xs text-muted-foreground">{s.key}</dt>
+                <dd className="mt-1 text-sm">
+                  {typeof s.value === 'object'
+                    ? JSON.stringify(s.value)
+                    : String(s.value)}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        ) : (
+          <p className="mt-4 text-sm text-muted-foreground">Aucun paramètre.</p>
+        )}
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Validité des tickets</CardTitle>
-        </CardHeader>
-        <CardContent className="text-sm text-muted-foreground space-y-2">
-          <p>
-            Par défaut, un ticket est valable 30 jours après le paiement, sans être lié à un jour de
-            repas précis. Une tâche planifiée expire automatiquement les tickets périmés.
-          </p>
-          <p className="font-mono text-xs">app_settings → tickets.validity_days</p>
-        </CardContent>
-      </Card>
+      <p className="text-xs text-muted-foreground">
+        La validité des tickets est définie dans la clé{' '}
+        <code className="rounded bg-muted px-1 font-mono">tickets.validity_days</code>{' '}
+        (30 jours par défaut). Une tâche planifiée expire automatiquement les
+        tickets périmés.
+      </p>
     </div>
   )
 }
 
-/** Champ d'upload — composant client pour le formulaire multipart. */
 function UploadField({
   label,
-  endpoint,
-  hint,
+  kind,
+  apiUrl,
 }: {
   label: string
-  endpoint: string
-  hint: string
+  kind: string
+  apiUrl: string | undefined
 }) {
   return (
-    <div className="space-y-2">
+    <form
+      action={`${apiUrl}/admin/settings/${kind}`}
+      method="post"
+      encType="multipart/form-data"
+      className="space-y-2"
+    >
       <p className="text-sm font-medium">{label}</p>
-      <form
-        action={`${process.env.NEXT_PUBLIC_API_URL}${endpoint}`}
-        method="post"
-        encType="multipart/form-data"
-        className="flex flex-wrap items-center gap-3"
+      <input
+        type="file"
+        name="file"
+        accept="image/png,image/jpeg,image/webp"
+        aria-label={label}
+        className="block w-full text-sm file:mr-3 file:rounded-md file:border-0 file:bg-secondary file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-secondary-foreground"
+      />
+      <button
+        type="submit"
+        className="h-9 rounded-lg border px-3 text-sm font-medium shadow-xs transition-colors hover:bg-accent"
       >
-        <input
-          type="file"
-          name="file"
-          accept="image/png,image/jpeg,image/webp"
-          aria-label={label}
-          className="text-sm file:mr-3 file:rounded-md file:border-0 file:bg-primary file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-primary-foreground"
-        />
-        <button
-          type="submit"
-          className="h-9 rounded-md border px-3 text-sm font-medium hover:bg-accent"
-        >
-          Envoyer
-        </button>
-      </form>
-      <p className="text-xs text-muted-foreground">{hint}</p>
-    </div>
+        Envoyer
+      </button>
+    </form>
   )
 }

@@ -1,6 +1,16 @@
 import { createClient } from '@/lib/supabase/server'
+import { api } from '@/lib/api-server'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
+import {
+  TableWrapper,
+  THead,
+  TBody,
+  TR,
+  TH,
+  TD,
+} from '@/components/ui/table'
+import { PageHeader } from '@/components/ui/layout'
 import { roleLabel } from '@/lib/format/status'
 import type { AppUser } from '@/types'
 
@@ -8,45 +18,55 @@ export const metadata = { title: 'Utilisateurs' }
 
 async function fetchUsers(token: string, params: URLSearchParams) {
   params.set('page_size', '20')
-  const res = await fetch(
-    `${process.env.NEXT_PUBLIC_API_URL}/admin/users?${params}`,
-    { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store' }
-  )
-  if (!res.ok) return { items: [] as AppUser[], pagination: null }
-  const body = await res.json()
-  return body.data as { items: AppUser[]; pagination: Record<string, number> }
+  try {
+    return await api<{ items: AppUser[] }>(`/admin/users?${params}`, token)
+  } catch {
+    return null
+  }
 }
 
 export default async function UtilisateursPage({
   searchParams,
 }: {
-  searchParams: { role?: string; search?: string; page?: string }
+  searchParams: { role?: string; search?: string }
 }) {
   const supabase = createClient()
-  const { data: { session } } = await supabase.auth.getSession()
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
 
   const params = new URLSearchParams()
   if (searchParams.role) params.set('role', searchParams.role)
   if (searchParams.search) params.set('search', searchParams.search)
-  if (searchParams.page) params.set('page', searchParams.page)
 
-  const data = session ? await fetchUsers(session.access_token, params) : { items: [], pagination: null }
+  const page = session ? await fetchUsers(session.access_token, params) : null
+  const users = page?.items ?? []
 
-  const roleFilters = [
-    { value: undefined, label: 'Tous' },
-    { value: 'student', label: 'Étudiants' },
-    { value: 'logistician', label: 'Logisticiens' },
-    { value: 'admin', label: 'Administrateurs' },
+  const roles = [
+    { value: undefined, label: 'Tous', href: '/admin/utilisateurs' },
+    {
+      value: 'student',
+      label: 'Étudiants',
+      href: '/admin/utilisateurs?role=student',
+    },
+    {
+      value: 'logisticien',
+      label: 'Logisticiens',
+      href: '/admin/utilisateurs?role=logisticien',
+    },
+    {
+      value: 'admin',
+      label: 'Administrateurs',
+      href: '/admin/utilisateurs?role=admin',
+    },
   ]
 
   return (
-    <div className="space-y-6 p-4 lg:p-6">
-      <div>
-        <h1 className="text-2xl font-bold">Utilisateurs</h1>
-        <p className="text-sm text-muted-foreground">
-          Comptes créés par l'administrateur — aucune inscription libre.
-        </p>
-      </div>
+    <div className="page">
+      <PageHeader
+        title="Utilisateurs"
+        description="Comptes créés par l'administration — aucune inscription libre."
+      />
 
       <form className="flex flex-wrap gap-3" method="get">
         <input
@@ -55,13 +75,13 @@ export default async function UtilisateursPage({
           defaultValue={searchParams.search ?? ''}
           placeholder="Nom ou matricule"
           aria-label="Rechercher un utilisateur"
-          className="h-10 flex-1 min-w-[200px] rounded-md border border-input bg-background px-3 text-sm"
+          className="h-10 min-w-[14rem] flex-1 rounded-lg border border-input bg-background px-3 text-sm shadow-xs"
         />
         <select
           name="role"
           defaultValue={searchParams.role ?? ''}
           aria-label="Filtrer par rôle"
-          className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+          className="h-10 rounded-lg border border-input bg-background px-3 text-sm shadow-xs"
         >
           <option value="">Tous les rôles</option>
           <option value="student">Étudiants</option>
@@ -70,68 +90,71 @@ export default async function UtilisateursPage({
         </select>
         <button
           type="submit"
-          className="h-10 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+          className="h-10 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground shadow-xs hover:bg-primary/90"
         >
           Rechercher
         </button>
       </form>
 
-      <div className="flex gap-2">
-        {roleFilters.map((f) => {
-          const active = (searchParams.role ?? undefined) === f.value
-          const href = f.value ? `/admin/utilisateurs?role=${f.value}` : '/admin/utilisateurs'
+      <nav className="flex flex-wrap gap-2" aria-label="Filtrer par rôle">
+        {roles.map((r) => {
+          const actif = (searchParams.role ?? undefined) === r.value
           return (
             <a
-              key={f.label}
-              href={href}
-              aria-current={active ? 'true' : undefined}
-              className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
-                active ? 'border-primary bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-accent'
-              }`}
+              key={r.label}
+              href={r.href}
+              aria-current={actif ? 'page' : undefined}
+              className={
+                actif
+                  ? 'rounded-full bg-primary px-3.5 py-1.5 text-xs font-medium text-primary-foreground'
+                  : 'rounded-full border px-3.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground'
+              }
             >
-              {f.label}
+              {r.label}
             </a>
           )
         })}
-      </div>
+      </nav>
 
-      {data.items.length === 0 ? (
-        <p className="py-10 text-center text-sm text-muted-foreground">Aucun utilisateur.</p>
-      ) : (
+      {users.length === 0 ? (
         <Card>
-          <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="border-b bg-muted/50 text-left">
-                  <tr>
-                    <th className="px-4 py-3 font-medium">Matricule</th>
-                    <th className="px-4 py-3 font-medium">Nom</th>
-                    <th className="px-4 py-3 font-medium">Chambre</th>
-                    <th className="px-4 py-3 font-medium">Rôle</th>
-                    <th className="px-4 py-3 font-medium">Statut</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y">
-                  {data.items.map((u) => (
-                    <tr key={u.id} className="hover:bg-muted/30">
-                      <td className="px-4 py-3 font-mono text-xs">{u.matricule ?? '—'}</td>
-                      <td className="px-4 py-3 font-medium">{u.full_name}</td>
-                      <td className="px-4 py-3">{u.room ?? '—'}</td>
-                      <td className="px-4 py-3">{roleLabel(u.role)}</td>
-                      <td className="px-4 py-3">
-                        {u.is_active ? (
-                          <Badge variant="success">Actif</Badge>
-                        ) : (
-                          <Badge variant="destructive">Désactivé</Badge>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+          <CardContent className="py-12 text-center text-sm text-muted-foreground">
+            Aucun utilisateur ne correspond à cette recherche.
           </CardContent>
         </Card>
+      ) : (
+        <TableWrapper>
+          <THead>
+            <TR>
+              <TH>Matricule</TH>
+              <TH>Nom</TH>
+              <TH>Chambre</TH>
+              <TH>Rôle</TH>
+              <TH>Statut</TH>
+            </TR>
+          </THead>
+          <TBody>
+            {users.map((u) => (
+              <TR key={u.id}>
+                <TD className="font-mono text-xs">{u.matricule ?? '—'}</TD>
+                <TD className="font-medium">{u.full_name}</TD>
+                <TD>{u.room ?? '—'}</TD>
+                <TD>{roleLabel(u.role)}</TD>
+                <TD>
+                  {u.is_active ? (
+                    <Badge variant="success" dot>
+                      Actif
+                    </Badge>
+                  ) : (
+                    <Badge variant="destructive" dot>
+                      Désactivé
+                    </Badge>
+                  )}
+                </TD>
+              </TR>
+            ))}
+          </TBody>
+        </TableWrapper>
       )}
     </div>
   )

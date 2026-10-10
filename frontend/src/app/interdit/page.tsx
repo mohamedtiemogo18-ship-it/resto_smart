@@ -1,18 +1,29 @@
-export default function ForbiddenPage() {
+import { EmptyState } from '@/components/ui/alert'
+import { Button } from '@/components/ui/button'
+import { PageHeader } from '@/components/ui/layout'
+import Link from 'next/link'
+
+export default function InterditPage() {
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-4 p-4 text-center">
-      <p className="text-6xl font-bold text-destructive">403</p>
-      <h1 className="text-xl font-semibold">Accès refusé</h1>
-      <p className="max-w-sm text-sm text-muted-foreground">
-        Votre rôle ne permet pas d'accéder à cet espace. Contactez l'administrateur si vous pensez
-        qu'il s'agit d'une erreur.
-      </p>
-      <a
-        href="/"
-        className="mt-2 h-10 rounded-md bg-primary px-4 text-sm font-medium leading-10 text-primary-foreground"
-      >
-        Retour à l'accueil
-      </a>
+    <div className="grid min-h-screen place-items-center bg-muted/25 px-4 py-10">
+      <div className="w-full max-w-md">
+        <PageHeader
+          title="Accès refusé"
+          description="Votre rôle ne permet pas d'accéder à cet espace."
+          className="mb-8"
+        />
+
+        <EmptyState
+          icon={<span aria-hidden="true">🔒</span>}
+          title="403 — Espace interdit"
+          description="Si vous pensez qu'il s'agit d'une erreur, contactez l'administrateur pour qu'il modifie votre rôle."
+          action={
+            <Button asChild>
+              <Link href="/">Retour à l'accueil</Link>
+            </Button>
+          }
+        />
+      </div>
     </div>
   )
 }

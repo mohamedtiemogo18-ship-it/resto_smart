@@ -2,74 +2,88 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Minus, Plus, Trash2 } from 'lucide-react'
+import { Minus, Plus, Trash2, UtensilsCrossed } from 'lucide-react'
 import { toast } from 'sonner'
 
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Field, Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Alert, EmptyState } from '@/components/ui/alert'
 import { ErrorState } from '@/components/ui/error-state'
+import { PageHeader } from '@/components/ui/layout'
 import { useCreateReservation, useMeals } from '@/hooks/use-api'
-import { formatMoney } from '@/lib/format/money'
+import { computeChange, formatMoney } from '@/lib/format/money'
 import { ApiError } from '@/lib/api'
 import type { Meal } from '@/types'
 
-interface Line {
+interface Ligne {
   meal: Meal
-  quantity: number
+  quantite: number
 }
 
 export default function ReserverPage() {
   const router = useRouter()
   const { data: meals, isLoading, isError, error, refetch } = useMeals()
-  const create = useCreateReservation()
 
-  const [lines, setLines] = useState<Line[]>([])
+  const [lignes, setLignes] = useState<Ligne[]>([])
   const [note, setNote] = useState('')
 
-  const available = (meals ?? []).filter((m) => m.price)
+  const disponibles = (meals ?? []).filter((m) => m.price)
+  const creer = useCreateReservation()
 
-  function add(meal: Meal) {
-    setLines((prev) => {
-      const existing = prev.find((l) => l.meal.id === meal.id)
-      if (existing) {
+  function ajouter(meal: Meal) {
+    setLignes((prev) => {
+      const existe = prev.find((l) => l.meal.id === meal.id)
+      if (existe) {
         return prev.map((l) =>
-          l.meal.id === meal.id ? { ...l, quantity: Math.min(99, l.quantity + 1) } : l
+          l.meal.id === meal.id
+            ? { ...l, quantite: Math.min(99, l.quantite + 1) }
+            : l
         )
       }
-      return [...prev, { meal, quantity: 1 }]
+      return [...prev, { meal, quantite: 1 }]
     })
   }
 
-  function setQuantity(mealId: number, quantity: number) {
-    if (quantity < 1) return remove(mealId)
-    setLines((prev) =>
-      prev.map((l) => (l.meal.id === mealId ? { ...l, quantity: Math.min(99, quantity) } : l))
+  function changerQuantite(mealId: number, quantite: number) {
+    if (quantite < 1) {
+      retirer(mealId)
+      return
+    }
+    setLignes((prev) =>
+      prev.map((l) =>
+        l.meal.id === mealId ? { ...l, quantite: Math.min(99, quantite) } : l
+      )
     )
   }
 
-  function remove(mealId: number) {
-    setLines((prev) => prev.filter((l) => l.meal.id !== mealId))
+  function retirer(mealId: number) {
+    setLignes((prev) => prev.filter((l) => l.meal.id !== mealId))
   }
 
-  // Le total est un aperçu : le montant officiel est recalculé par le backend
-  const total = lines.reduce(
-    (sum, l) => sum + Number.parseFloat(l.meal.price!.amount) * l.quantity,
+  // Aperçu uniquement : le montant officiel est recalculé par le serveur
+  const apercu = lignes.reduce(
+    (somme, l) => somme + Number.parseFloat(l.meal.price!.amount) * l.quantite,
     0
   )
+  const totalTickets = lignes.reduce((somme, l) => somme + l.quantite, 0)
 
-  async function submit() {
-    if (lines.length === 0) {
+  async function soumettre() {
+    if (lignes.length === 0) {
       toast.error('Ajoutez au moins un repas')
       return
     }
+
     try {
-      const reservation = await create.mutateAsync({
-        items: lines.map((l) => ({ meal_type_id: l.meal.id, quantity: l.quantity })),
+      const reservation = await creer.mutateAsync({
+        items: lignes.map((l) => ({
+          meal_type_id: l.meal.id,
+          quantity: l.quantite,
+        })),
         note: note.trim() || undefined,
       })
-      toast.success('Réservation enregistrée', {
+      toast.success('Demande enregistrée', {
         description: `Référence ${reservation.reservation_number}`,
       })
       router.push(`/etudiant/mes-reservations/${reservation.id}`)
@@ -83,105 +97,131 @@ export default function ReserverPage() {
 
   if (isLoading) {
     return (
-      <div className="space-y-4">
-        <Skeleton className="h-8 w-48" />
-        <div className="grid gap-3 sm:grid-cols-3">
+      <div className="page">
+        <PageHeader title="Réserver" description="Chargement des repas disponibles…" />
+        <div className="grid gap-4 sm:grid-cols-3">
           {[1, 2, 3].map((i) => (
-            <Skeleton key={i} className="h-28" />
+            <Skeleton key={i} className="h-28 rounded-xl" />
           ))}
         </div>
       </div>
     )
   }
 
-  if (isError) return <ErrorState error={error} onRetry={refetch} />
+  if (isError) return <div className="page"><ErrorState error={error} onRetry={refetch} /></div>
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Réserver</h1>
-        <p className="text-sm text-muted-foreground">
-          Choisissez vos repas, le montant sera calculé automatiquement.
-        </p>
-      </div>
+    <div className="page">
+      <PageHeader
+        title="Réserver"
+        description="Choisissez vos repas. Le montant sera calculé automatiquement."
+      />
 
-      <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
+      <div className="grid gap-6 lg:grid-cols-[1fr_22rem] lg:items-start">
         {/* Sélection des repas */}
         <section className="space-y-3">
-          <h2 className="text-sm font-semibold text-muted-foreground">Repas disponibles</h2>
-          <div className="grid gap-3 sm:grid-cols-3">
-            {available.map((meal) => (
-              <button
-                key={meal.id}
-                type="button"
-                onClick={() => add(meal)}
-                className="rounded-lg border p-4 text-left transition-colors hover:border-primary hover:bg-primary/5"
-              >
-                <p className="font-medium">{meal.name}</p>
-                <p className="mt-1 text-sm text-muted-foreground tabular-nums">
-                  {formatMoney(meal.price!.amount)}
-                </p>
-              </button>
-            ))}
-          </div>
-          {available.length === 0 && (
-            <p className="text-sm text-muted-foreground">
-              Aucun repas n'est disponible à la réservation pour le moment.
-            </p>
+          <h2 className="section-label">Repas disponibles</h2>
+
+          {disponibles.length === 0 ? (
+            <EmptyState
+              icon={<UtensilsCrossed className="h-5 w-5" />}
+              title="Aucun repas disponible"
+              description="Aucun tarif n'est en vigueur pour le moment. Contactez le service de restauration."
+            />
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-3">
+              {disponibles.map((meal) => {
+                const dansPanier = lignes.find((l) => l.meal.id === meal.id)
+                return (
+                  <button
+                    key={meal.id}
+                    type="button"
+                    onClick={() => ajouter(meal)}
+                    aria-label={`Ajouter ${meal.name}`}
+                    className={
+                      dansPanier
+                        ? 'surface-hover group relative p-4 text-left ring-2 ring-primary/40'
+                        : 'surface-hover group relative p-4 text-left'
+                    }
+                  >
+                    <span className="absolute right-3 top-3 flex h-7 w-7 items-center justify-center rounded-full bg-primary text-sm font-bold text-primary-foreground opacity-0 transition-opacity group-hover:opacity-100">
+                      +
+                    </span>
+                    <p className="font-medium">{meal.name}</p>
+                    <p className="mt-1 text-sm tabular-nums text-muted-foreground">
+                      {formatMoney(meal.price!.amount)}
+                    </p>
+                    {meal.description && (
+                      <p className="mt-1 text-xs text-muted-foreground/80">
+                        {meal.description}
+                      </p>
+                    )}
+                    {dansPanier && (
+                      <span className="absolute right-3 top-3 flex h-6 min-w-6 items-center justify-center rounded-full bg-primary px-1.5 text-xs font-bold tabular-nums text-primary-foreground">
+                        {dansPanier.quantite}
+                      </span>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
           )}
         </section>
 
         {/* Panier */}
-        <aside className="space-y-4">
+        <aside className="lg:sticky lg:top-6">
           <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base">Ma commande</CardTitle>
+            <CardHeader>
+              <CardTitle>Ma commande</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3">
-              {lines.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
+            <CardContent className="space-y-4">
+              {lignes.length === 0 ? (
+                <p className="rounded-lg bg-muted/50 p-4 text-center text-sm text-muted-foreground">
                   Sélectionnez un repas pour commencer.
                 </p>
               ) : (
-                <ul className="space-y-3">
-                  {lines.map(({ meal, quantity }) => (
-                    <li key={meal.id} className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium">{meal.name}</span>
+                <ul className="divide-y">
+                  {lignes.map(({ meal, quantite }) => (
+                    <li key={meal.id} className="space-y-2 py-3 first:pt-0">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="truncate text-sm font-medium">
+                          {meal.name}
+                        </span>
                         <button
                           type="button"
-                          onClick={() => remove(meal.id)}
+                          onClick={() => retirer(meal.id)}
                           aria-label={`Retirer ${meal.name}`}
-                          className="text-muted-foreground hover:text-destructive"
+                          className="shrink-0 rounded p-1 text-muted-foreground transition-colors hover:text-destructive"
                         >
                           <Trash2 className="h-4 w-4" />
                         </button>
                       </div>
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
+
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5">
                           <Button
                             variant="outline"
-                            size="icon"
-                            className="h-8 w-8"
-                            onClick={() => setQuantity(meal.id, quantity - 1)}
-                            aria-label="Diminuer"
+                            size="icon-sm"
+                            onClick={() => changerQuantite(meal.id, quantite - 1)}
+                            aria-label="Diminuer la quantité"
                           >
                             <Minus className="h-3 w-3" />
                           </Button>
-                          <span className="w-10 text-center text-sm tabular-nums">{quantity}</span>
+                          <span className="w-10 text-center text-sm font-medium tabular-nums">
+                            {quantite}
+                          </span>
                           <Button
                             variant="outline"
-                            size="icon"
-                            className="h-8 w-8"
-                            onClick={() => setQuantity(meal.id, quantity + 1)}
-                            aria-label="Augmenter"
+                            size="icon-sm"
+                            onClick={() => changerQuantite(meal.id, quantite + 1)}
+                            aria-label="Augmenter la quantité"
                           >
                             <Plus className="h-3 w-3" />
                           </Button>
                         </div>
-                        <span className="text-sm tabular-nums">
+                        <span className="text-sm font-medium tabular-nums">
                           {formatMoney(
-                            (Number.parseFloat(meal.price!.amount) * quantity).toFixed(2)
+                            (Number.parseFloat(meal.price!.amount) * quantite).toFixed(2)
                           )}
                         </span>
                       </div>
@@ -190,34 +230,41 @@ export default function ReserverPage() {
                 </ul>
               )}
 
-              <div className="border-t pt-3">
-                <label htmlFor="note" className="text-xs text-muted-foreground">
-                  Note (optionnel)
-                </label>
+              <Field label="Note (optionnel)" htmlFor="note">
                 <Input
                   id="note"
                   value={note}
                   maxLength={500}
                   onChange={(e) => setNote(e.target.value)}
                   placeholder="Précision pour le logisticien"
-                  className="mt-1"
                 />
-              </div>
+              </Field>
 
-              <div className="flex items-center justify-between border-t pt-3">
-                <span className="text-sm font-medium">Total estimé</span>
-                <span className="text-lg font-bold tabular-nums">
-                  {formatMoney(total.toFixed(2))}
-                </span>
+              <div className="space-y-2 border-t pt-4">
+                <div className="flex items-center justify-between text-sm text-muted-foreground">
+                  <span>Repas commandés</span>
+                  <span className="tabular-nums">{totalTickets}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="font-medium">Total estimé</span>
+                  <span className="text-xl font-bold tabular-nums">
+                    {formatMoney(apercu.toFixed(2))}
+                  </span>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Le montant définitif est recalculé par le serveur à partir des
+                  tarifs en vigueur.
+                </p>
               </div>
 
               <Button
                 className="w-full"
                 size="lg"
-                disabled={lines.length === 0 || create.isPending}
-                onClick={submit}
+                disabled={lignes.length === 0}
+                loading={creer.isPending}
+                onClick={soumettre}
               >
-                {create.isPending ? 'Envoi…' : 'Confirmer la demande'}
+                {creer.isPending ? 'Envoi…' : 'Confirmer la demande'}
               </Button>
             </CardContent>
           </Card>

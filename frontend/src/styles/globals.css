@@ -2,71 +2,261 @@
 @tailwind components;
 @tailwind utilities;
 
-/*
- * Police système plutôt que `next/font/google` :
- * aucun appel réseau au build, donc un build reproductible hors ligne.
- * La pile reprend les polices déjà présentes sur les postes de l'université.
- */
+/* ==========================================================================
+   SYSTÈME DE DESIGN
+   Palette sobre, contraste AA, échelles régulières.
+   Les couleurs sont en HSL pour permettre les variantes d'opacité.
+   ========================================================================== */
+
 @layer base {
   :root {
+    /* Surfaces */
     --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    --foreground: 224 24% 12%;
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
-    --primary: 221.2 83.2% 53.3%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 221.2 83.2% 53.3%;
-    --radius: 0.5rem;
+    --card-foreground: 224 24% 12%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 224 24% 12%;
+
+    /* Marque — bleu institutionnel */
+    --primary: 221 83% 45%;
+    --primary-foreground: 0 0% 100%;
+    --primary-muted: 221 83% 96%;
+
+    /* Secondaire */
+    --secondary: 220 16% 96%;
+    --secondary-foreground: 224 24% 16%;
+
+    /* Atténué — texte secondaire */
+    --muted: 220 16% 96%;
+    --muted-foreground: 220 12% 46%;
+
+    /* Accent — survols */
+    --accent: 221 83% 96%;
+    --accent-foreground: 221 83% 32%;
+
+    /* Destructeur — erreurs, annulations */
+    --destructive: 0 72% 46%;
+    --destructive-foreground: 0 0% 100%;
+    --destructive-muted: 0 72% 97%;
+
+    /* Succès — paiements, tickets valides */
+    --success: 152 62% 32%;
+    --success-foreground: 0 0% 100%;
+    --success-muted: 152 62% 96%;
+
+    /* Avertissement — en attente */
+    --warning: 32 92% 42%;
+    --warning-foreground: 0 0% 100%;
+    --warning-muted: 40 92% 95%;
+
+    /* Information */
+    --info: 199 84% 40%;
+    --info-foreground: 0 0% 100%;
+    --info-muted: 199 84% 96%;
+
+    /* Bordures et focus */
+    --border: 220 16% 90%;
+    --input: 220 16% 88%;
+    --ring: 221 83% 45%;
+
+    --radius: 0.625rem;
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-    --primary: 217.2 91.2% 59.8%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 224.3 76.3% 48%;
-  }
-}
+    --background: 224 26% 8%;
+    --foreground: 220 20% 96%;
+    --card: 224 22% 11%;
+    --card-foreground: 220 20% 96%;
+    --popover: 224 22% 11%;
+    --popover-foreground: 220 20% 96%;
 
-@layer base {
-  * {
-    @apply border-border;
+    --primary: 217 88% 62%;
+    --primary-foreground: 224 26% 8%;
+    --primary-muted: 217 60% 18%;
+
+    --secondary: 223 18% 18%;
+    --secondary-foreground: 220 20% 92%;
+
+    --muted: 223 18% 18%;
+    --muted-foreground: 220 12% 62%;
+
+    --accent: 217 60% 20%;
+    --accent-foreground: 217 88% 78%;
+
+    --destructive: 0 72% 58%;
+    --destructive-foreground: 0 0% 100%;
+    --destructive-muted: 0 50% 18%;
+
+    --success: 152 58% 48%;
+    --success-foreground: 224 26% 8%;
+    --success-muted: 152 40% 16%;
+
+    --warning: 36 90% 55%;
+    --warning-foreground: 224 26% 8%;
+    --warning-muted: 36 50% 18%;
+
+    --info: 199 84% 55%;
+    --info-foreground: 224 26% 8%;
+    --info-muted: 199 50% 18%;
+
+    --border: 223 18% 20%;
+    --input: 223 18% 24%;
+    --ring: 217 88% 62%;
+  }
+
+  /* Police système : aucun appel réseau, build reproductible hors ligne.
+     La pile reprend les polices déjà présentes sur les postes. */
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
   }
 
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground antialiased;
     font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
       "Helvetica Neue", Arial, "Noto Sans", sans-serif;
-    font-feature-settings: "rlig" 1, "calt" 1;
-    -webkit-font-smoothing: antialiased;
+    font-feature-settings: "rlig" 1, "calt" 1, "cv05" 1;
+    line-height: 1.55;
+  }
+
+  /* Titres plus resserrés, comme le veut la convention typographique */
+  h1,
+  h2,
+  h3,
+  h4 {
+    @apply font-semibold tracking-tight text-foreground;
+    line-height: 1.2;
+  }
+
+  h1 {
+    @apply text-2xl;
+  }
+  h2 {
+    @apply text-xl;
+  }
+  h3 {
+    @apply text-lg;
+  }
+
+  /* Les chiffres s'alignent colonne par colonne */
+  table,
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Focus visible partout, au clavier comme à la souris */
+  :focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+  }
+
+  /* Barres de défilement discrètes */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--border)) transparent;
+  }
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply rounded-full bg-border;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-muted-foreground/40;
+  }
+}
+
+@layer components {
+  /* Carte standard : fond blanc, bordure fine, ombre légère au survol */
+  .surface {
+    @apply rounded-xl border bg-card text-card-foreground shadow-xs;
+  }
+
+  .surface-hover {
+    @apply surface transition-shadow duration-200 hover:shadow-md;
+  }
+
+  /* Libellé de section : petit, atténué, espacé */
+  .section-label {
+    @apply text-xs font-medium uppercase tracking-wider text-muted-foreground;
+  }
+
+  /* Conteneur de page */
+  .page {
+    @apply mx-auto w-full max-w-7xl space-y-6 px-4 py-6 sm:px-6 lg:px-8 lg:py-8;
+  }
+
+  /* Grille de statistiques */
+  .stat-grid {
+    @apply grid gap-4 sm:grid-cols-2 xl:grid-cols-4;
+  }
+
+  /* Puce de statut */
+  .dot {
+    @apply inline-block h-2 w-2 shrink-0 rounded-full;
   }
 }
 
 @layer utilities {
-  /* Les montants et les numéros s'alignent colonne par colonne */
-  .tabular-nums {
-    font-variant-numeric: tabular-nums;
+  .shadow-xs {
+    box-shadow:
+      0 1px 2px 0 rgb(0 0 0 / 0.04),
+      0 1px 3px 0 rgb(0 0 0 / 0.06);
+  }
+
+  /* Animation d'entrée pour les listes */
+  .animate-in {
+    animation: animate-in 0.25s ease-out both;
+  }
+
+  @keyframes animate-in {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  /* Pulse pour les éléments en attente de paiement */
+  .animate-attention {
+    animation: attention 2s ease-in-out infinite;
+  }
+
+  @keyframes attention {
+    0%,
+    100% {
+      box-shadow: 0 0 0 0 hsl(var(--warning) / 0.4);
+    }
+    50% {
+      box-shadow: 0 0 0 4px hsl(var(--warning) / 0);
+    }
+  }
+}
+
+/* Respect de la préférence système : moins de mouvement */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Impression : les tickets et rapports doivent sortir propres */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  body {
+    @apply bg-white text-black;
   }
 }

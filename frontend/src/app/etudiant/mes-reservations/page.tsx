@@ -1,27 +1,30 @@
 import Link from 'next/link'
+
 import { createClient } from '@/lib/supabase/server'
-import { Card, CardContent } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { EmptyState } from '@/components/ui/error-state'
-import { Button } from '@/components/ui/button'
-import { formatDate, formatDateTime, formatRelative, toApiDate } from '@/lib/format/date'
-import { formatMoney, computeChange, formatAmount } from '@/lib/format/money'
-import { statusLabel } from '@/lib/format/status'
-import type { Reservation } from '@/types'
+import { api } from '@/lib/api-server'
+import { EmptyState } from '@/components/ui/alert'
+import { PageHeader, Section } from '@/components/ui/layout'
+import { ReservationRow } from '@/components/reservations/reservation-row'
+import type { Paged, Reservation, ReservationStatus } from '@/types'
 
 export const metadata = { title: 'Mes réservations' }
 
-async function fetchReservations(token: string, status?: string) {
-  const params = new URLSearchParams({ page_size: '20' })
-  if (status) params.set('status', status)
+const FILTERS: { value: ReservationStatus | 'ALL'; label: string }[] = [
+  { value: 'ALL', label: 'Toutes' },
+  { value: 'PENDING_PAYMENT', label: 'En attente' },
+  { value: 'PAID', label: 'Payées' },
+  { value: 'CANCELLED', label: 'Annulées' },
+]
 
-  const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/reservations/mine?${params}`, {
-    headers: { Authorization: `Bearer ${token}` },
-    cache: 'no-store',
-  })
-  if (!res.ok) return []
-  const body = await res.json()
-  return (body.data?.items ?? []) as Reservation[]
+async function fetchReservations(token: string, status?: string) {
+  const params = new URLSearchParams({ page_size: '50' })
+  if (status && status !== 'ALL') params.set('status', status)
+
+  try {
+    return await api<Paged<Reservation>>(`/reservations/mine?${params}`, token)
+  } catch {
+    return null
+  }
 }
 
 export default async function MesReservationsPage({
@@ -30,84 +33,89 @@ export default async function MesReservationsPage({
   searchParams: { status?: string }
 }) {
   const supabase = createClient()
-  const { data: { session } } = await supabase.auth.getSession()
-  const reservations = session ? await fetchReservations(session.access_token, searchParams.status) : []
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
 
-  const filters = [
-    { value: undefined, label: 'Toutes' },
-    { value: 'PENDING_PAYMENT', label: 'En attente' },
-    { value: 'PAID', label: 'Payées' },
-    { value: 'CANCELLED', label: 'Annulées' },
-  ]
+  const actif = (searchParams.status ?? 'ALL') as ReservationStatus | 'ALL'
+  const page = session ? await fetchReservations(session.access_token, actif) : null
+  const reservations = page?.items ?? []
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Mes réservations</h1>
-        <p className="text-sm text-muted-foreground">
-          Historique de vos demandes de repas.
-        </p>
-      </div>
+    <div className="page">
+      <PageHeader
+        title="Mes réservations"
+        description="Historique complet de vos demandes de repas."
+      />
 
-      <div className="flex gap-2 overflow-x-auto pb-1">
-        {filters.map((f) => {
-          const active = (searchParams.status ?? undefined) === f.value
+      {/* Filtres sous forme de liens — fonctionnent sans JavaScript */}
+      <nav aria-label="Filtrer par statut" className="flex flex-wrap gap-2">
+        {FILTERS.map((f) => {
+          const isActive = f.value === actif
           return (
             <Link
-              key={f.label}
-              href={f.value ? `/etudiant/mes-reservations?status=${f.value}` : '/etudiant/mes-reservations'}
-              className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
-                active
-                  ? 'border-primary bg-primary/10 text-primary'
-                  : 'text-muted-foreground hover:bg-accent'
-              }`}
-              aria-current={active ? 'true' : undefined}
+              key={f.value}
+              href={
+                f.value === 'ALL'
+                  ? '/etudiant/mes-reservations'
+                  : `/etudiant/mes-reservations?status=${f.value}`
+              }
+              aria-current={isActive ? 'page' : undefined}
+              className={
+                isActive
+                  ? 'rounded-full bg-primary px-3.5 py-1.5 text-xs font-medium text-primary-foreground'
+                  : 'rounded-full border px-3.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground'
+              }
             >
               {f.label}
             </Link>
           )
         })}
-      </div>
+      </nav>
 
-      {reservations.length === 0 ? (
-        <EmptyState
-          title="Aucune réservation"
-          description="Vos demandes apparaîtront ici."
-          action={
-            <Button asChild>
-              <Link href="/etudiant/reserver">Réserver</Link>
-            </Button>
-          }
-        />
-      ) : (
-        <ul className="space-y-3">
-          {reservations.map((r) => (
-            <li key={r.id}>
-              <Link href={`/etudiant/mes-reservations/${r.id}`}>
-                <Card className="transition-shadow hover:shadow-md">
-                  <CardContent className="flex items-center justify-between p-4">
-                    <div className="space-y-1">
-                      <p className="font-mono text-sm">{r.reservation_number}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {formatDateTime(r.created_at)} · {r.items_count} repas
-                      </p>
-                      {r.status === 'PAID' && (
-                        <p className="text-xs text-muted-foreground">
-                          {r.tickets_used} consommés · {r.tickets_pending} en attente
-                        </p>
-                      )}
-                    </div>
-                    <div className="text-right space-y-1">
-                      <p className="font-semibold tabular-nums">{formatMoney(r.total_amount)}</p>
-                      <Badge status={r.status}>{statusLabel(r.status)}</Badge>
-                    </div>
-                  </CardContent>
-                </Card>
-              </Link>
-            </li>
-          ))}
-        </ul>
-      )}
+      <Section>
+        {reservations.length === 0 ? (
+          <EmptyState
+            title="Aucune réservation"
+            description={
+              actif === 'ALL'
+                ? 'Vos demandes apparaîtront ici dès que vous en aurez fait une.'
+                : 'Aucune réservation ne correspond à ce filtre.'
+            }
+            action={
+              <ButtonLink href="/etudiant/reserver">Réserver</ButtonLink>
+            }
+          />
+        ) : (
+          <ul className="space-y-3">
+            {reservations.map((reservation) => (
+              <li key={reservation.id} className="animate-in">
+                <ReservationRow
+                  reservation={reservation}
+                  href={`/etudiant/mes-reservations/${reservation.id}`}
+                />
+              </li>
+            ))}
+          </ul>
+        )}
+      </Section>
     </div>
+  )
+}
+
+function ButtonLink({
+  href,
+  children,
+}: {
+  href: string
+  children: React.ReactNode
+}) {
+  return (
+    <Link
+      href={href}
+      className="inline-flex h-10 items-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground shadow-xs transition-colors hover:bg-primary/90"
+    >
+      {children}
+    </Link>
   )
 }

@@ -1,4 +1,4 @@
-﻿import { redirect } from 'next/navigation'
+import { redirect } from 'next/navigation'
 import { getProfile } from '@/lib/auth/profile'
 import { StudentShell } from '@/components/layout/student-shell'
 

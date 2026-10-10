@@ -1,5 +1,7 @@
 import { AlertCircle, RefreshCw } from 'lucide-react'
+
 import { Button } from './button'
+import { Alert } from './alert'
 import { ApiError } from '@/lib/api'
 
 export function ErrorState({
@@ -10,49 +12,45 @@ export function ErrorState({
   onRetry?: () => void
 }) {
   const apiError = error instanceof ApiError ? error : null
-  const message = apiError?.message ?? 'Une erreur est survenue.'
+  const message = apiError?.message ?? "Une erreur est survenue lors du chargement."
   const code = apiError?.code
 
   return (
-    <div
-      role="alert"
-      className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 space-y-3"
-    >
-      <div className="flex items-start gap-3">
-        <AlertCircle className="h-5 w-5 shrink-0 text-destructive mt-0.5" />
-        <div className="space-y-1">
-          <p className="text-sm font-medium text-destructive">{message}</p>
-          {code && (
-            <p className="text-xs text-muted-foreground font-mono">{code}</p>
-          )}
-        </div>
-      </div>
+    <Alert variant="destructive" title="Chargement impossible">
+      <p>{message}</p>
+      {code && <p className="mt-1 font-mono text-xs opacity-70">{code}</p>}
       {onRetry && (
-        <Button variant="outline" size="sm" onClick={onRetry}>
-          <RefreshCw className="h-4 w-4" />
+        <Button variant="outline" size="sm" className="mt-3" onClick={onRetry}>
+          <RefreshCw className="h-3.5 w-3.5" />
           Réessayer
         </Button>
       )}
-    </div>
+    </Alert>
   )
 }
 
-export function EmptyState({
-  title,
+/** Erreur de chargement pleine page, pour les vues serveur. */
+export function ErrorPage({
+  title = 'Une erreur est survenue',
   description,
-  action,
+  code,
 }: {
-  title: string
+  title?: string
   description?: string
-  action?: React.ReactNode
+  code?: string
 }) {
   return (
-    <div className="flex flex-col items-center justify-center rounded-lg border border-dashed p-10 text-center">
-      <p className="text-sm font-medium">{title}</p>
-      {description && (
-        <p className="mt-1 text-sm text-muted-foreground max-w-sm">{description}</p>
-      )}
-      {action && <div className="mt-4">{action}</div>}
+    <div className="flex min-h-[50vh] flex-col items-center justify-center gap-4 p-6 text-center">
+      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-destructive-muted text-destructive">
+        <AlertCircle className="h-6 w-6" />
+      </div>
+      <div className="space-y-1">
+        <h2 className="text-lg font-semibold">{title}</h2>
+        {description && (
+          <p className="max-w-md text-pretty text-sm text-muted-foreground">{description}</p>
+        )}
+        {code && <p className="font-mono text-xs text-muted-foreground">{code}</p>}
+      </div>
     </div>
   )
 }

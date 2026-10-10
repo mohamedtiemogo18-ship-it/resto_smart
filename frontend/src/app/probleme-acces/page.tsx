@@ -1,53 +1,56 @@
+import { PageHeader } from '@/components/ui/layout'
+import { EmptyState } from '@/components/ui/alert'
+import { Alert } from '@/components/ui/alert'
+import { Button } from '@/components/ui/button'
 import Link from 'next/link'
-
-export const metadata = { title: 'Accès impossible' }
 
 export default function ProblemeAccesPage() {
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-5 p-6 text-center">
-      <h1 className="text-2xl font-bold">Votre profil n'a pas pu être chargé</h1>
+    <div className="grid min-h-screen place-items-center bg-muted/25 px-4 py-10">
+      <div className="w-full max-w-lg">
+        <PageHeader
+          title="Profil non chargé"
+          description="Vous êtes connecté, mais le serveur n'a pas renvoyé votre profil."
+        />
 
-      <p className="max-w-md text-sm text-muted-foreground">
-        Vous êtes bien connecté, mais le serveur n'a pas renvoyé votre profil. Cela
-        arrive dans trois cas :
-      </p>
+        <div className="mt-6 space-y-4">
+          <Alert variant="warning" title="Trois causes possibles">
+            <ol className="mt-1 list-decimal space-y-1.5 pl-4">
+              <li>
+                Le backend n'est pas démarré, ou la variable{' '}
+                <code className="rounded bg-background/60 px-1 font-mono text-xs">
+                  API_INTERNAL_URL
+                </code>{' '}
+                ne pointe pas vers lui.
+              </li>
+              <li>
+                Votre compte existe dans l'authentification, mais aucune ligne
+                ne lui correspond dans la table{' '}
+                <code className="rounded bg-background/60 px-1 font-mono text-xs">
+                  public.profiles
+                </code>
+                .
+              </li>
+              <li>Votre compte a été désactivé par l'administrateur.</li>
+            </ol>
+          </Alert>
 
-      <ol className="max-w-md space-y-2 text-left text-sm text-muted-foreground">
-        <li>
-          <strong className="text-foreground">1.</strong> Le backend n'est pas
-          démarré, ou l'URL <code className="font-mono text-xs">API_INTERNAL_URL</code>{' '}
-          ne pointe pas vers lui.
-        </li>
-        <li>
-          <strong className="text-foreground">2.</strong> Votre compte existe dans
-          l'authentification, mais aucun profil ne lui correspond dans la table{' '}
-          <code className="font-mono text-xs">public.profiles</code>.
-        </li>
-        <li>
-          <strong className="text-foreground">3.</strong> Votre compte a été désactivé
-          par l'administrateur.
-        </li>
-      </ol>
-
-      <p className="max-w-md text-sm text-muted-foreground">
-        Si vous êtes administrateur, vérifiez qu'une ligne de la table{' '}
-        <code className="font-mono text-xs">profiles</code> porte le même
-        identifiant que votre compte, avec un rôle renseigné.
-      </p>
-
-      <div className="flex gap-3">
-        <Link
-          href="/"
-          className="h-10 rounded-md bg-primary px-4 text-sm font-medium leading-10 text-primary-foreground"
-        >
-          Réessayer
-        </Link>
-        <Link
-          href="/login"
-          className="h-10 rounded-md border px-4 text-sm font-medium leading-10 hover:bg-accent"
-        >
-          Se reconnecter
-        </Link>
+          <EmptyState
+            icon={<span aria-hidden="true">🔍</span>}
+            title="Vérifier votre profil"
+            description="Si vous êtes administrateur, assurez-vous qu'une ligne de la table profiles porte le même identifiant que votre compte, avec un rôle renseigné."
+            action={
+              <div className="flex flex-wrap justify-center gap-2">
+                <Button asChild>
+                  <Link href="/">Réessayer</Link>
+                </Button>
+                <Button asChild variant="outline">
+                  <Link href="/login">Se reconnecter</Link>
+                </Button>
+              </div>
+            }
+          />
+        </div>
       </div>
     </div>
   )
