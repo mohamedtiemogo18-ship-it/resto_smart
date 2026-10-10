@@ -18,6 +18,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.api.router import api_router
 from app.config import settings
+from app.core.envelope import EnvelopeMiddleware
 from app.core.errors import register_exception_handlers
 from app.core.logging import (
     actor_id_var,
@@ -110,6 +111,9 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(RequestContextMiddleware)
 app.add_middleware(SlowAPIMiddleware)
+# Enveloppe les réponses JSON dans {"success": true, "data": ...}.
+# Ajouté en dernier, donc exécuté en premier : il voit la réponse finale.
+app.add_middleware(EnvelopeMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.BACKEND_CORS_ORIGINS,

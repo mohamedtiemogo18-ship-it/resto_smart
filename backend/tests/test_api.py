@@ -89,7 +89,8 @@ class TestAuthentification:
         client = make_client(STUDENT)
         res = client.get("/api/v1/auth/me")
         assert res.status_code == 200
-        data = res.json()
+        # Toutes les réponses métier sont enveloppées
+        data = res.json()["data"]
         assert data["matricule"] == "ETU-2024-0198"
         assert data["role"] == "student"
 
@@ -226,4 +227,4 @@ class TestAntiFraudeQR:
                 json={"ticket_number": "TKT-2026-000412"},
             )
         assert res.status_code == 200
-        assert res.json()["ticket_number"] == "TKT-2026-000412"
+        assert res.json()["data"]["ticket_number"] == "TKT-2026-000412"

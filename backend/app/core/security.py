@@ -21,11 +21,17 @@ from app.schemas.user import CurrentUser
 # ---------------------------------------------------------------------------
 
 _jwk_clients: dict[str, PyJWKClient] = {}
+#: Jetons déjà vérifiés : jti -> (expiration_unix, claims)
+#: Évite une résolution JWKS et un décodage à chaque appel sur le même jeton.
+_token_cache: dict[str, tuple[float, dict]] = {}
+
+#: Durée de vie du cache de jetons, bornée par l'expiration du jeton lui-même
+_TOKEN_CACHE_TTL = 300
 
 
 def _jwk_client(jwks_url: str) -> PyJWKClient:
     if jwks_url not in _jwk_clients:
-        _jwk_clients[jwks_url] = PyJWKClient(jwks_url, cache_keys=True)
+        _jwk_clients[jwks_url] = PyJWKClient(jwks_url, cache_keys=True, lifespan=3600)
     return _jwk_clients[jwks_url]
 
 
@@ -33,17 +39,44 @@ def verify_jwt(token: str, supabase_url: str) -> dict:
     """Vérifie la signature et les revendications du JWT Supabase.
 
     Lève `Unauthorized` si le jeton est invalide ou expiré.
+
+    Le résultat est mis en cache brièvement : une même session peut déclencher
+    plusieurs requêtes serveur coup sur coup, et refaire à chaque fois une
+    résolution JWKS coûte un aller-retour réseau.
     """
+    cache_key = f"{supabase_url}:{token[:48]}"
+    now = time.time()
+
+    cached = _token_cache.get(cache_key)
+    if cached and cached[0] > now:
+        return cached[1]
+
+    claims = _verify_uncached(token, supabase_url)
+
+    exp = claims.get("exp")
+    ttl = min(_TOKEN_CACHE_TTL, (exp - int(now))) if isinstance(exp, (int, float)) else _TOKEN_CACHE_TTL
+    if ttl > 0:
+        _token_cache[cache_key] = (now + ttl, claims)
+        # Purge légère pour éviter une croissance non bornée
+        if len(_token_cache) > 500:
+            for k in [k for k, v in _token_cache.items() if v[0] < now]:
+                del _token_cache[k]
+
+    return claims
+
+
+def _verify_uncached(token: str, supabase_url: str) -> dict:
     try:
-        signing_key = _jwk_client(f"{supabase_url}/auth/v1/.well-known/jwks.json").get_signing_key_from_jwt(token)
-        claims = jwt.decode(
+        signing_key = _jwk_client(
+            f"{supabase_url}/auth/v1/.well-known/jwks.json"
+        ).get_signing_key_from_jwt(token)
+        return jwt.decode(
             token,
             signing_key.key,
             algorithms=["ES256", "RS256", "HS256"],
             audience="authenticated",
             options={"verify_exp": True, "verify_aud": True},
         )
-        return claims
     except jwt.ExpiredSignatureError as exc:
         raise Unauthorized("Session expirée", code="TOKEN_EXPIRED") from exc
     except jwt.InvalidTokenError as exc:
